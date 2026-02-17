@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convolutional Neural Network</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg: #040810;
+    --panel: rgba(5, 20, 40, 0.85);
+    --accent: #00f5ff;
+    --accent2: #ff6b35;
+    --accent3: #b44fff;
+    --text: #c8e6ff;
+    --dim: #4a7a9b;
+    --glow: 0 0 20px rgba(0,245,255,0.4);
+    --glow2: 0 0 20px rgba(255,107,53,0.4);
+    --glow3: 0 0 20px rgba(180,79,255,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Starfield */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(0,80,140,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(80,0,140,0.1) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  canvas#stars {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    padding: 30px 20px 50px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+    animation: fadeDown 1s ease forwards;
+  }
+
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.4rem, 3vw, 2.6rem);
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-shadow: var(--glow), 0 0 60px rgba(0,245,255,0.2);
+    text-transform: uppercase;
+  }
+
+  .subtitle {
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: var(--dim);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  /* Layer Labels */
+  .labels-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    padding: 0 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .layer-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-align: center;
+    padding: 4px 10px;
+    border: 1px solid;
+    border-radius: 2px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    animation: fadeIn 1.5s ease forwards;
+  }
+
+  .lbl-input   { color: var(--accent); border-color: rgba(0,245,255,0.3); background: rgba(0,245,255,0.05); }
+  .lbl-conv    { color: var(--accent2); border-color: rgba(255,107,53,0.3); background: rgba(255,107,53,0.05); }
+  .lbl-pool    { color: #ffd700; border-color: rgba(255,215,0,0.3); background: rgba(255,215,0,0.05); }
+  .lbl-fc      { color: var(--accent3); border-color: rgba(180,79,255,0.3); background: rgba(180,79,255,0.05); }
+  .lbl-output  { color: #4dff91; border-color: rgba(77,255,145,0.3); background: rgba(77,255,145,0.05); }
+
+  /* Main network canvas */
+  #networkCanvas {
+    display: block;
+    width: 100%;
+    border: 1px solid rgba(0,245,255,0.12);
+    border-radius: 4px;
+    background: rgba(2,12,24,0.8);
+    box-shadow: 0 0 40px rgba(0,245,255,0.07), inset 0 0 60px rgba(0,0,0,0.5);
+    cursor: crosshair;
+  }
+
+  /* Info panel */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+  }
+
+  .info-card {
+    background: var(--panel);
+    border: 1px solid rgba(0,245,255,0.1);
+    border-radius: 4px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 1s ease forwards;
+    animation-fill-mode: both;
+  }
+
+  .info-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+  }
+
+  .info-card.c1::before { background: var(--accent); }
+  .info-card.c2::before { background: var(--accent2); }
+  .info-card.c3::before { background: #ffd700; }
+  .info-card.c4::before { background: var(--accent3); }
+  .info-card.c5::before { background: #4dff91; }
+
+  .info-card h3 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    color: var(--dim);
+  }
+
+  .info-card .value {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--text);
+  }
+
+  .info-card .desc {
+    font-size: 0.68rem;
+    color: var(--dim);
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  /* Active layer indicator */
+  #activeLayer {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 0.75rem;
+    color: var(--dim);
+    letter-spacing: 0.2em;
+    height: 20px;
+    transition: color 0.3s;
+  }
+
+  #activeLayer span {
+    color: var(--accent);
+    text-shadow: var(--glow);
+  }
+
+  /* Scanline effect */
+  .scanline {
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* Pulse animation classes for JS */
+  .pulse { animation: pulse 0.3s ease; }
+  @keyframes pulse {
+    0%   { opacity: 0.5; }
+    50%  { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<div class="scanline"></div>
+
+<div class="wrapper">
+  <header>
+    <h1>Convolutional Neural Network</h1>
+    <div class="subtitle">Architecture Visualization · Image Classification · Interactive</div>
+  </header>
+
+  <div class="labels-row" id="labelsRow"></div>
+
+  <canvas id="networkCanvas"></canvas>
+
+  <div id="activeLayer">HOVER OVER A LAYER TO INSPECT</div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#00f5ff"></div>Input</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ff6b35"></div>Conv + ReLU</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ffd700"></div>Max Pool</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#b44fff"></div>Fully Connected</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4dff91"></div>Softmax Output</div>
+  </div>
+
+  <div class="info-grid" id="infoGrid"></div>
+</div>
+
+<script>
+// ─── Starfield ────────────────────────────────────────────────────────────────
+const starCanvas = document.getElementById('stars');
+const starCtx = starCanvas.getContext('2d');
+let stars = [];
+
+function resizeStars() {
+  starCanvas.width = window.innerWidth;
+  starCanvas.height = window.innerHeight;
+  stars = Array.from({length: 120}, () => ({
+    x: Math.random() * starCanvas.width,
+    y: Math.random() * starCanvas.height,
+    r: Math.random() * 1.2,
+    o: Math.random() * 0.5 + 0.1,
+    speed: Math.random() * 0.3 + 0.05
+  }));
+}
+resizeStars();
+window.addEventListener('resize', resizeStars);
+
+function animateStars() {
+  starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
+  stars.forEach(s => {
+    s.y += s.speed;
+    if (s.y > starCanvas.height) s.y = 0;
+    starCtx.beginPath();
+    starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    starCtx.fillStyle = `rgba(180,220,255,${s.o})`;
+    starCtx.fill();
+  });
+  requestAnimationFrame(animateStars);
+}
+animateStars();
+
+// ─── CNN Architecture Definition ─────────────────────────────────────────────
+const LAYERS = [
+  {
+    id: 'input',
+    name: 'INPUT',
+    type: 'input',
+    color: '#00f5ff',
+    shadowColor: 'rgba(0,245,255,0.6)',
+    slices: 3,
+    w: 32, h: 32,
+    detail: { label: 'Input Layer', shape: '224×224×3', params: '0', desc: 'RGB image tensor. Each pixel has 3 channels (R, G, B). Normalized to [0, 1].' }
+  },
+  {
+    id: 'conv1',
+    name: 'CONV 1',
+    type: 'conv',
+    color: '#ff6b35',
+    shadowColor: 'rgba(255,107,53,0.6)',
+    slices: 6,
+    w: 28, h: 28,
+    detail: { label: 'Conv Layer 1', shape: '64×112×112', params: '9,408', desc: '64 filters of size 7×7, stride 2. Extracts low-level edges, colors, textures. ReLU activation.' }
+  },
+  {
+    id: 'pool1',
+    name: 'POOL 1',
+    type: 'pool',
+    color: '#ffd700',
+    shadowColor: 'rgba(255,215,0,0.6)',
+    slices: 6,
+    w: 22, h: 22,
+    detail: { label: 'Max Pool 1', shape: '64×56×56', params: '0', desc: '3×3 max pooling, stride 2. Reduces spatial size by 75%, retains dominant features.' }
+  },
+  {
+    id: 'conv2',
+    name: 'CONV 2',
+    type: 'conv',
+    color: '#ff6b35',
+    shadowColor: 'rgba(255,107,53,0.6)',
+    slices: 8,
+    w: 18, h: 18,
+    detail: { label: 'Conv Layer 2', shape: '128×56×56', params: '73,728', desc: '128 filters, 3×3 kernel. Builds upon earlier features to detect shapes and patterns. ReLU activation.' }
+  },
+  {
+    id: 'conv3',
+    name: 'CONV 3',
+    type: 'conv',
+    color: '#ff6b35',
+    shadowColor: 'rgba(255,107,53,0.6)',
+    slices: 9,
+    w: 16, h: 16,
+    detail: { label: 'Conv Layer 3', shape: '256×28×28', params: '294,912', desc: '256 filters, 3×3 kernel. Captures complex features like corners, object parts. ReLU activation.' }
+  },
+  {
+    id: 'pool2',
+    name: 'POOL 2',
+    type: 'pool',
+    color: '#ffd700',
+    shadowColor: 'rgba(255,215,0,0.6)',
+    slices: 9,
+    w: 13, h: 13,
+    detail: { label: 'Max Pool 2', shape: '256×14×14', params: '0', desc: 'Global spatial reduction. 2×2 max pool with stride 2. Aggressive compression phase.' }
+  },
+  {
+    id: 'conv4',
+    name: 'CONV 4',
+    type: 'conv',
+    color: '#ff6b35',
+    shadowColor: 'rgba(255,107,53,0.6)',
+    slices: 10,
+    w: 11, h: 11,
+    detail: { label: 'Conv Layer 4', shape: '512×14×14', params: '1,179,648', desc: '512 filters, 3×3 kernel. Deep feature extraction. High-level semantic patterns emerge.' }
+  },
+  {
+    id: 'pool3',
+    name: 'POOL 3',
+    type: 'pool',
+    color: '#ffd700',
+    shadowColor: 'rgba(255,215,0,0.6)',
+    slices: 8,
+    w: 9, h: 9,
+    detail: { label: 'Global Avg Pool', shape: '512×7×7', params: '0', desc: 'Final spatial pooling. Compresses feature maps to 7×7, preparing for fully connected layers.' }
+  },
+  {
+    id: 'fc1',
+    name: 'FC 1',
+    type: 'fc',
+    color: '#b44fff',
+    shadowColor: 'rgba(180,79,255,0.6)',
+    slices: 1,
+    neurons: 14,
+    w: 12, h: 70,
+    detail: { label: 'Fully Connected 1', shape: '4096 units', params: '102,760,448', desc: 'Dense layer. All 25,088 flattened features connect to 4096 neurons. ReLU + Dropout 0.5.' }
+  },
+  {
+    id: 'fc2',
+    name: 'FC 2',
+    type: 'fc',
+    color: '#b44fff',
+    shadowColor: 'rgba(180,79,255,0.6)',
+    slices: 1,
+    neurons: 10,
+    w: 12, h: 55,
+    detail: { label: 'Fully Connected 2', shape: '4096 units', params: '16,777,216', desc: 'Second dense layer for further abstraction. ReLU activation + Dropout 0.5 for regularization.' }
+  },
+  {
+    id: 'output',
+    name: 'OUTPUT',
+    type: 'output',
+    color: '#4dff91',
+    shadowColor: 'rgba(77,255,145,0.6)',
+    slices: 1,
+    neurons: 7,
+    w: 12, h: 40,
+    detail: { label: 'Output Layer', shape: '1000 classes', params: '4,096,000', desc: 'Softmax classifier. Outputs probability distribution over 1000 ImageNet categories.' }
+  }
+];
+
+// ─── Build Labels ─────────────────────────────────────────────────────────────
+const labelsRow = document.getElementById('labelsRow');
+LAYERS.forEach(l => {
+  const div = document.createElement('div');
+  const cls = l.type === 'input' ? 'lbl-input' : l.type === 'conv' ? 'lbl-conv' :
+              l.type === 'pool' ? 'lbl-pool' : l.type === 'fc' ? 'lbl-fc' : 'lbl-output';
+  div.className = `layer-label ${cls}`;
+  div.textContent = l.name;
+  labelsRow.appendChild(div);
+});
+
+// ─── Build Info Cards ─────────────────────────────────────────────────────────
+const infoGrid = document.getElementById('infoGrid');
+const totalParams = LAYERS.reduce((s, l) => s + parseInt(l.detail.params.replace(/,/g,'')), 0);
+
+[
+  { label: 'Total Parameters', val: totalParams.toLocaleString(), desc: 'Learnable weights in the full network', cls: 'c1' },
+  { label: 'Conv Layers', val: '4', desc: 'Feature extraction via learned filters', cls: 'c2' },
+  { label: 'Pooling Layers', val: '3', desc: 'Spatial downsampling operations', cls: 'c3' },
+  { label: 'FC Layers', val: '3', desc: 'Dense classification layers', cls: 'c4' },
+  { label: 'Output Classes', val: '1,000', desc: 'ImageNet classification categories', cls: 'c5' },
+].forEach((card, i) => {
+  const div = document.createElement('div');
+  div.className = `info-card ${card.cls}`;
+  div.style.animationDelay = `${i * 0.1 + 0.5}s`;
+  div.style.opacity = '0';
+  div.innerHTML = `<h3>${card.label}</h3><div class="value">${card.val}</div><div class="desc">${card.desc}</div>`;
+  infoGrid.appendChild(div);
+});
+
+// ─── Network Canvas ───────────────────────────────────────────────────────────
+const canvas = document.getElementById('networkCanvas');
+const ctx = canvas.getContext('2d');
+let W, H, layerRects = [];
+let activeLayerIdx = -1;
+let signalT = 0;
+let signalRunning = false;
+let signalCallback = null;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  W = rect.width;
+  H = 340;
+  canvas.style.height = H + 'px';
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+  draw();
+}
+
+function getLayerPositions() {
+  const n = LAYERS.length;
+  const padX = 40;
+  const usableW = W - padX * 2;
+  const step = usableW / (n - 1);
+  const cy = H / 2;
+
+  layerRects = LAYERS.map((layer, i) => {
+    const cx = padX + i * step;
+    if (layer.type === 'fc' || layer.type === 'output') {
+      return { cx, cy, layer, bbox: { x: cx - layer.w/2, y: cy - layer.h/2, w: layer.w, h: layer.h } };
+    }
+    const totalH = layer.slices * 6 + layer.h;
+    const totalW = layer.slices * 6 + layer.w;
+    return {
+      cx, cy, layer,
+      bbox: { x: cx - totalW/2, y: cy - totalH/2, w: totalW, h: totalH }
+    };
+  });
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return {r,g,b};
+}
+
+function drawFeatureMap(cx, cy, layer, alpha=1, highlight=false) {
+  const s = layer.slices;
+  const lw = layer.w, lh = layer.h;
+  const offset = 6;
+  const rgb = hexToRgb(layer.color);
+
+  for (let i = s - 1; i >= 0; i--) {
+    const ox = cx - (s*offset)/2 + i*offset;
+    const oy = cy - (s*offset)/2 + i*offset;
+    const x = ox - lw/2;
+    const y = oy - lh/2;
+
+    // Glow
+    if (highlight || i === 0) {
+      ctx.save();
+      ctx.shadowColor = layer.shadowColor;
+      ctx.shadowBlur = highlight ? 20 : 8;
+    }
+
+    // Fill
+    const grad = ctx.createLinearGradient(x, y, x + lw, y + lh);
+    const bri = 0.08 + (s - i) / s * 0.15;
+    grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},${(bri+0.1)*alpha})`);
+    grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},${bri*alpha})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, lw, lh);
+
+    // Noise texture
+    if (highlight) {
+      for (let px = 0; px < lw; px += 4) {
+        for (let py = 0; py < lh; py += 4) {
+          const v = Math.random();
+          ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${v * 0.15})`;
+          ctx.fillRect(x+px, y+py, 2, 2);
+        }
+      }
+    }
+
+    // Border
+    ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${(0.5 + (s-i)/s*0.5)*alpha})`;
+    ctx.lineWidth = highlight ? 1.5 : 0.8;
+    ctx.strokeRect(x, y, lw, lh);
+
+    if (highlight || i === 0) ctx.restore();
+
+    // Activation map lines on top face (top slice only)
+    if (i === s - 1 && highlight) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)`;
+      ctx.lineWidth = 0.5;
+      for (let lx = 0; lx < lw; lx += 5) {
+        ctx.beginPath();
+        ctx.moveTo(x+lx, y);
+        ctx.lineTo(x+lx, y+lh);
+        ctx.stroke();
+      }
+      for (let ly = 0; ly < lh; ly += 5) {
+        ctx.beginPath();
+        ctx.moveTo(x, y+ly);
+        ctx.lineTo(x+lw, y+ly);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+}
+
+function drawFCLayer(cx, cy, layer, alpha=1, highlight=false) {
+  const rgb = hexToRgb(layer.color);
+  const n = layer.neurons;
+  const spacing = layer.h / (n - 1);
+  const nr = 5;
+
+  if (highlight) {
+    ctx.save();
+    ctx.shadowColor = layer.shadowColor;
+    ctx.shadowBlur = 25;
+  }
+
+  // Connection lines between neurons
+  if (highlight) {
+    ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.06)`;
+    ctx.lineWidth = 0.5;
+    for (let a = 0; a < n; a++) {
+      for (let b = 0; b < n; b++) {
+        const y1 = cy - layer.h/2 + a*spacing;
+        const y2 = cy - layer.h/2 + b*spacing;
+        ctx.beginPath();
+        ctx.moveTo(cx - 2, y1);
+        ctx.lineTo(cx + 2, y2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Neuron nodes
+  for (let i = 0; i < n; i++) {
+    const ny = cy - layer.h/2 + i * spacing;
+    ctx.beginPath();
+    ctx.arc(cx, ny, nr, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(cx-1, ny-1, 0, cx, ny, nr);
+    grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},${0.9*alpha})`);
+    grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},${0.2*alpha})`);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${0.8*alpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  if (highlight) ctx.restore();
+}
+
+function drawConnector(from, to, alpha=1, animated=false, animT=0) {
+  const fromRect = from.bbox;
+  const toRect   = to.bbox;
+
+  const x1 = fromRect.x + fromRect.w;
+  const y1 = from.cy;
+  const x2 = toRect.x;
+  const y2 = to.cy;
+
+  const mx = (x1 + x2) / 2;
+
+  ctx.save();
+  if (animated) {
+    const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+    const t = (animT % 1);
+    grad.addColorStop(Math.max(0, t-0.15), 'rgba(0,245,255,0)');
+    grad.addColorStop(t, 'rgba(0,245,255,0.9)');
+    grad.addColorStop(Math.min(1, t+0.15), 'rgba(0,245,255,0)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,245,255,0.8)';
+    ctx.shadowBlur = 8;
+  } else {
+    ctx.strokeStyle = `rgba(60,100,140,${0.18 * alpha})`;
+    ctx.lineWidth = 0.8;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.bezierCurveTo(mx, y1, mx, y2, x2, y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  getLayerPositions();
+
+  // Grid lines (subtle)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,80,120,0.07)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 60) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 60) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Draw connectors (static)
+  for (let i = 0; i < layerRects.length - 1; i++) {
+    const isActive = (i === activeLayerIdx || i+1 === activeLayerIdx);
+    drawConnector(layerRects[i], layerRects[i+1], isActive ? 1 : 0.5);
+  }
+
+  // Animated signal
+  if (signalRunning) {
+    const progress = signalT; // 0 to layerRects.length-1
+    const segIdx = Math.floor(progress);
+    const segFrac = progress - segIdx;
+    if (segIdx < layerRects.length - 1) {
+      drawConnector(layerRects[segIdx], layerRects[segIdx+1], 1, true, segFrac);
+    }
+  }
+
+  // Draw layers
+  layerRects.forEach((lr, i) => {
+    const { cx, cy, layer } = lr;
+    const isActive = (i === activeLayerIdx);
+
+    if (layer.type === 'fc' || layer.type === 'output') {
+      drawFCLayer(cx, cy, layer, 1, isActive);
+    } else {
+      drawFeatureMap(cx, cy, layer, 1, isActive);
+    }
+
+    // Layer index label
+    ctx.save();
+    ctx.fillStyle = isActive ? layer.color : 'rgba(100,140,180,0.3)';
+    ctx.font = `10px 'Share Tech Mono'`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`L${i+1}`, cx, H - 14);
+    ctx.restore();
+  });
+
+  // Highlight active signal segment (glow on layer)
+  if (signalRunning) {
+    const si = Math.floor(signalT);
+    if (si < layerRects.length) {
+      const lr = layerRects[si];
+      const rgb = hexToRgb(lr.layer.color);
+      ctx.save();
+      ctx.shadowColor = lr.layer.shadowColor;
+      ctx.shadowBlur = 30;
+      ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.7)`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(lr.bbox.x - 4, lr.bbox.y - 4, lr.bbox.w + 8, lr.bbox.h + 8);
+      ctx.restore();
+    }
+  }
+}
+
+// ─── Signal animation ─────────────────────────────────────────────────────────
+function runSignal() {
+  signalRunning = true;
+  signalT = 0;
+  const total = LAYERS.length - 1;
+  const speed = 0.018;
+
+  function step() {
+    signalT += speed;
+    if (signalT >= total) {
+      signalT = total;
+      signalRunning = false;
+      draw();
+      setTimeout(() => runSignal(), 800);
+      return;
+    }
+    draw();
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// Start signal after a delay
+setTimeout(() => runSignal(), 1200);
+
+// ─── Interaction ──────────────────────────────────────────────────────────────
+const activeLayerEl = document.getElementById('activeLayer');
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  let found = -1;
+  layerRects.forEach((lr, i) => {
+    const b = lr.bbox;
+    if (mx >= b.x - 10 && mx <= b.x + b.w + 10 && my >= b.y - 10 && my <= b.y + b.h + 10) {
+      found = i;
+    }
+  });
+
+  if (found !== activeLayerIdx) {
+    activeLayerIdx = found;
+    draw();
+    if (found >= 0) {
+      const d = LAYERS[found].detail;
+      activeLayerEl.innerHTML = `<span>${d.label}</span> · ${d.shape} · params: ${d.params} · ${d.desc}`;
+    } else {
+      activeLayerEl.innerHTML = 'HOVER OVER A LAYER TO INSPECT';
+    }
+  }
+});
+
+canvas.addEventListener('mouseleave', () => {
+  activeLayerIdx = -1;
+  activeLayerEl.innerHTML = 'HOVER OVER A LAYER TO INSPECT';
+  draw();
+});
+
+// ─── Resize ───────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  resize();
+});
+
+resize();
+</script>
+</body>
+</html>
